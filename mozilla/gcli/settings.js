@@ -1,7 +1,17 @@
 /*
- * Copyright 2009-2011 Mozilla Foundation and contributors
- * Licensed under the New BSD license. See LICENSE.txt or:
- * http://opensource.org/licenses/BSD-3-Clause
+ * Copyright 2012, Mozilla Foundation and contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 define(function(require, exports, module) {
@@ -29,8 +39,7 @@ var types = require('gcli/types');
 var allSettings = [];
 
 /**
- * No setup required because settings are pre-loaded with Mozilla,
- * but match API with main settings.js
+ * Cache existing settings on startup
  */
 exports.startup = function() {
   imports.prefBranch.getChildList('').forEach(function(name) {
@@ -114,9 +123,8 @@ Object.defineProperty(Setting.prototype, 'value', {
       case imports.prefBranch.PREF_STRING:
         var value = imports.prefBranch.getComplexValue(this.name,
                 Components.interfaces.nsISupportsString).data;
-        // Try in case it's a localized string (will throw an exception if not)
-        var isL10n = /^chrome:\/\/.+\/locale\/.+\.properties/.test(value);
-        if (!this.changed && isL10n) {
+        // In case of a localized string
+        if (/^chrome:\/\/.+\/locale\/.+\.properties/.test(value)) {
           value = imports.prefBranch.getComplexValue(this.name,
                   Components.interfaces.nsIPrefLocalizedString).data;
         }
@@ -158,6 +166,13 @@ Object.defineProperty(Setting.prototype, 'value', {
   enumerable: true
 });
 
+/**
+ * Reset this setting to it's initial default value
+ */
+Setting.prototype.setDefault = function() {
+  imports.prefBranch.clearUserPref(this.name);
+  Services.prefs.savePrefFile(null);
+};
 
 /**
  * 'static' function to get an array containing all known Settings
@@ -181,8 +196,35 @@ exports.addSetting = function(prefSpec) {
       allSettings[i] = setting;
     }
   }
+  exports.onChange({ added: setting.name });
   return setting;
 };
+
+/**
+ * Getter for an existing setting. Generally use of this function should be
+ * avoided. Systems that define a setting should export it if they wish it to
+ * be available to the outside, or not otherwise. Use of this function breaks
+ * that boundary and also hides dependencies. Acceptable uses include testing
+ * and embedded uses of GCLI that pre-define all settings (e.g. Firefox)
+ * @param name The name of the setting to fetch
+ * @return The found Setting object, or undefined if the setting was not found
+ */
+exports.getSetting = function(name) {
+  var found = undefined;
+  allSettings.some(function(setting) {
+    if (setting.name === name) {
+      found = setting;
+      return true;
+    }
+    return false;
+  });
+  return found;
+};
+
+/**
+ * Event for use to detect when the list of settings changes
+ */
+exports.onChange = util.createEvent('Settings.onChange');
 
 /**
  * Remove a setting. A no-op in this case

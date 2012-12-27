@@ -503,11 +503,11 @@ display as ``args.message``.
 The ``context`` object has the following signature:
 
     {
-      environment: ...,   // environment object passed to createDisplay()
-      exec: ...,          // function to execute a command
-      update: ...,        // function to alter the text of the input area
-      createView: ...,    // function to help creating rich output
-      createPromise: ..., // function to create a Promise
+      environment: ..., // environment object passed to createDisplay()
+      exec: ...,        // function to execute a command
+      update: ...,      // function to alter the text of the input area
+      createView: ...,  // function to help creating rich output
+      defer: ...,       // function to create a deferred promise
     }
 
 The ``environment`` object is opaque to GCLI. It can be used for providing
@@ -524,7 +524,7 @@ The ``document`` object is also passed to GCLI at startup. In some environments
 (e.g. embedded in Firefox) there is no global ``document``. This object
 provides a way to create DOM nodes.
 
-``createPromise()`` allows commands to execute asynchronously.
+``defer()`` allows commands to execute asynchronously.
 
 
 ## Returning data
@@ -535,13 +535,16 @@ the ``returnValue`` setting.
 ``returnValue`` processing is currently functioning, but incomplete, and being
 tracked in [Bug 657595](http://bugzil.la/657595). Currently you should specify
 a ``returnType`` of ``string`` or ``html``. If using HTML, you can return
-either a string for use in processing like ``innerHTML``, or a DOM node.
+either an HTML string or a DOM node.
 
 In the future, JSON will be strongly encouraged as the return type, with some
 formatting functions to convert the JSON to HTML.
 
 Asynchronous output is achieved using a promise created from the ``context``
-parameter: ``context.createPromise()``.
+parameter: ``context.defer()`` (The context object also has a deprecated
+``context.createPromise()`` function which will be removed at some point.
+The function was renamed along with the change to a promise system that was
+more compatible with Q and Firefox promises.)
 
 Some examples of this is practice:
 
@@ -556,8 +559,7 @@ and available as input to other commands as a plain string.
     ...
     return "<p>Hello</p>";
 
-GCLI will interpret this as HTML, and parse it (probably using innerHTML) for
-display.
+GCLI will interpret this as HTML, and parse it for display.
 
     { returnType: "html" }
     ...
@@ -594,21 +596,15 @@ information.
 
     { returnType: "string" }
     ...
-    var promise = context.createPromise();
+    var deferred = context.defer();
     setTimeout(function() {
-      promise.resolve("hello");
+      deferred.resolve("hello");
     }, 500);
-    return promise;
+    return deferred.promise;
 
-This is an example of how to provide asynchronous output. It is expected that
-we will be able to provide progress feedback using:
-
-    promise.setProgress(0.5, "Half way through");
-
-Errors can be signalled by throwing an exception. GCLI will display the
-message property (or the toString() value if there is no message property).
-(However see *3 principles for writing commands* above for ways to avoid
-doing this).
+Errors can be signaled by throwing an exception. GCLI will display the message
+property (or the toString() value if there is no message property). (However
+see *3 principles for writing commands* above for ways to avoid doing this).
 
 
 ## Specifying Types
